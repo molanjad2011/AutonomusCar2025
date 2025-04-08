@@ -24,11 +24,12 @@ debug_mode = True
 # PID Controller (Proportional integral derivative): it's trying to decreese error, the error is the steering angle errors
 class PID:
     def __init__(self, Kp, Ki, Kd):
-        self.Kp = Kp      # ضریب تناسبی
-        self.Ki = Ki      # ضریب انتگرالی
-        self.Kd = Kd      # ضریب مشتقی
+        self.Kp = Kp  # ضریب تناسبی
+        self.Ki = Ki  # ضریب انتگرالی
+        self.Kd = Kd  # ضریب مشتقی
         self.integral = 0.0
         self.prev_error = 0.0
+        self.deciding_curve = []
 
     def update(self, error):
         # Proportional
@@ -37,12 +38,16 @@ class PID:
         self.integral += error
         I = self.Ki * self.integral
         # Derivative: در مشتق هم نیازی به تقسیم دیفرانسیل زمان نداریم
-        derivative = (error - self.prev_error)
+        derivative = error - self.prev_error
         D = self.Kd * derivative
         self.prev_error = error
         # خروجی خام PID (این خروجی ممکن است بسیار بزرگ شود)
         raw_output = P + I + D
         return raw_output
+
+    def continiusPID(self, error):
+
+        pass
 
 
 # یک تبدیل هندسی است که یک ذوزنقه را روی کل عکس می‌کشد و سپس تصویر را به اندازۀ یک مستطیل می‌کشد تا تصویر به گونه ای شود که انگار یک پرنده از بالا در حال نگاه کردن است
@@ -51,12 +56,13 @@ class PID:
 def bird_eye_view_transform(image, src_points, dst_points, output_size):
     transformed = cv2.getPerspectiveTransform(src_points, dst_points)
     warped = cv2.warpPerspective(image, transformed, output_size)
-    return warped # شکل تبدیل شده
+    return warped  # شکل تبدیل شده
 
-# استفاده از اچ‌اس‌وی برای پیدا کردن خطوط سفید در تصویر 
+
+# استفاده از اچ‌اس‌وی برای پیدا کردن خطوط سفید در تصویر
 def hsv_mask(image):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    
+
     # حد بالا و پایین سفید بودن رنگ خطوط
     lower_white = np.array([0, 0, 200])
     upper_white = np.array([180, 30, 255])
@@ -67,8 +73,7 @@ def hsv_mask(image):
 def detect_edges(image):
     blurred = cv2.GaussianBlur(image, (7, 7), 3)
     edges = cv2.Canny(blurred, 50, 150)
-    return edges # اینو دیگه میدونین :)
-
+    return edges  # اینو دیگه میدونین :)
 
 
 def detect_lines_hough(
@@ -83,7 +88,7 @@ def detect_lines_hough(
         minLineLength=min_line_length,
         maxLineGap=max_line_gap,
     )
-    return lines # اینم دیگه میدونین ;)
+    return lines  # اینم دیگه میدونین ;)
 
 
 # محاسبه میانگین نقاط خطوط در محور افقی برای برازش نقطه ای روی خط سمت راست جاده
@@ -102,10 +107,15 @@ def compute_right_lane_point(lines, y_target, image_width):
                             x_intersect = x1 + (x2 - x1) * ((y_target - y1) / (y2 - y1))
                             right_x.append(x_intersect)
     if len(right_x) == 0:
-        return image_width + 10  # در صورت عدم شناسایی، فرض می‌کنیم خط در سمت راست تصویر قرار دارد و مقداری را هم به آن اضافه میکنیم
-    return np.mean(right_x) # در نهایت میانگین میگیریم
+        return (
+            image_width + 10
+        )  # در صورت عدم شناسایی، فرض می‌کنیم خط در سمت راست تصویر قرار دارد و مقداری را هم به آن اضافه میکنیم
+    return np.mean(right_x)  # در نهایت میانگین میگیریم
+
 
 pid = PID(Kp=4, Ki=0.005, Kd=1.1)
+
+
 # تابع اصلی پردازش تصویر و محاسبه زاویه فرمان
 def process_image_and_compute_steering(image, offset=50):
     """
@@ -116,7 +126,7 @@ def process_image_and_compute_steering(image, offset=50):
         return None
 
     height, width = image.shape[:2]
-    
+
     # با فیلتر اچ اس وی دیگر نیازی به خاکستری کردن رنگ نیست
     hsv_filtered = hsv_mask(image)
 
@@ -156,7 +166,7 @@ def process_image_and_compute_steering(image, offset=50):
     cte = desired_position - center_position
 
     # مرحله ۵: استفاده از کنترل‌کننده PID برای محاسبه زاویه فرمان بر اساس CTE
-    
+
     diffrence = pid.update(cte)
     steering_angle = np.arctan(diffrence / y_target) * (180 / np.pi)
 
@@ -197,17 +207,15 @@ def process_image_and_compute_steering(image, offset=50):
     cv2.ellipse(
         output,
         (int(center_position), height),
-        (1, 1),   # شعاع کمان
-        0,          # زاویه چرخش بیضی (در اینجا لازم نیست بچرخونیم)
+        (1, 1),  # شعاع کمان
+        0,  # زاویه چرخش بیضی (در اینجا لازم نیست بچرخونیم)
         0,
         steering_angle,
         (0, 0, 0),
-        2
+        2,
     )
 
-    un_bev = bird_eye_view_transform(
-        output, dst_points, src_points, (width, height)
-    )
+    un_bev = bird_eye_view_transform(output, dst_points, src_points, (width, height))
 
     # ۳. ترکیب با وزن – مثل overlay
     alpha = 0.6  # میزان شفافیت لایه بالا (HSV)
@@ -228,10 +236,13 @@ def process_image_and_compute_steering(image, offset=50):
 # Sleep for 3 seconds to make sure that client connected to the simulator
 time.sleep(3)
 
-
+prev_ns = 0
+avg_ns = 0
+hhm=0
 try:
     prev_steering = 1
     while True:
+        hhm=hhm+1
         # Counting the loops
         counter = counter + 1
 
@@ -250,14 +261,13 @@ try:
 
         # Start getting image and sensor data after 4 loops
         if counter > 4:
-            counter = counter + 1
             # Returns a list with three items which the 1st one is Left sensor data\
             # the 2nd one is the Middle Sensor data, and the 3rd is the Right one.
             sensors = car.getSensors()
 
             image = car.getImage()
             steering = process_image_and_compute_steering(image, 185)
-            
+
             if abs(steering - prev_steering) > 2.5 or abs(steering) > 20:
                 # car.setSpeed(20)
                 print("stop")
@@ -265,7 +275,14 @@ try:
                 car.setSpeed(3000)
             prev_steering = steering
 
-            
+            t = time.time()
+            avg_ns = avg_ns + t - prev_ns
+            print(prev_ns)
+            print(t)
+            prev_ns = t
+
+            print(avg_ns / hhm)
+
             car.setSteering(((steering / 90.0) * 100))
 
             # Showing the opencv type image
@@ -273,6 +290,6 @@ try:
             if cv2.waitKey(10) == ord("q"):
                 break
 
-            
+
 finally:
     car.stop()
