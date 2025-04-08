@@ -21,6 +21,7 @@ counter = 0
 debug_mode = True
 
 
+
 # PID Controller (Proportional integral derivative): it's trying to decreese error, the error is the steering angle errors
 class PID:
     def __init__(self, Kp, Ki, Kd):
@@ -69,8 +70,6 @@ def detect_edges(image):
     edges = cv2.Canny(blurred, 50, 150)
     return edges # اینو دیگه میدونین :)
 
-
-
 def detect_lines_hough(
     edges, rho=2, theta=np.pi / 180, threshold=70, min_line_length=50, max_line_gap=30
 ):
@@ -87,7 +86,7 @@ def detect_lines_hough(
 
 
 # محاسبه میانگین نقاط خطوط در محور افقی برای برازش نقطه ای روی خط سمت راست جاده
-def compute_right_lane_point(lines, y_target, image_width):
+def compute_right_lane_point(lines, y_target, right_lane_point, image_width):
     right_x = []
     if lines is not None:
         for line in lines:
@@ -102,12 +101,32 @@ def compute_right_lane_point(lines, y_target, image_width):
                             x_intersect = x1 + (x2 - x1) * ((y_target - y1) / (y2 - y1))
                             right_x.append(x_intersect)
     if len(right_x) == 0:
-        return image_width + 10  # در صورت عدم شناسایی، فرض می‌کنیم خط در سمت راست تصویر قرار دارد و مقداری را هم به آن اضافه میکنیم
-    return np.mean(right_x) # در نهایت میانگین میگیریم
+        return right_lane_point  # در صورت عدم شناسایی، فرض می‌کنیم خط در سمت راست تصویر قرار دارد و مقداری را هم به آن اضافه میکنیم
+    res = np.mean(right_x) # در نهایت میانگین میگیریم
+    return res
 
-pid = PID(Kp=4, Ki=0.005, Kd=1.1)
+def compute_left_lane_point(lines, y_target, left_lane_point, image_width):
+    left_x = []
+    if lines is not None:
+        for line in lines:
+            for x1, y1, x2, y2 in line:
+                # انتخاب خطوطی که احتمالاً مربوط به خط راست هستند؛ فرض بر این است که آنها در سمت راست قرار دارند.
+                # لذا قطعا آنها در سه چهارم دیگر صفحه هستند
+                if x1 < image_width * 0.75 and x2 < image_width * 0.75:
+                    # اگر خط از y_target عبور می‌کند (تفاوت علامتی)
+                    if (y1 - y_target) * (y2 - y_target) <= 0:
+                        # محاسبه نقطه‌ی تقاطع خط با y_target
+                        if (y2 - y1) != 0:
+                            x_intersect = x1 + (x2 - x1) * ((y_target - y1) / (y2 - y1))
+                            left_x.append(x_intersect)
+    if len(left_x) == 0:
+        return left_lane_point  # در صورت عدم شناسایی، فرض می‌کنیم خط در سمت راست تصویر قرار دارد و مقداری را هم به آن اضافه میکنیم
+    res = np.mean(left_x) # در نهایت میانگین میگیریم
+    return res
+
+pid = PID(Kp=4, Ki=0.0001, Kd=10)
 # تابع اصلی پردازش تصویر و محاسبه زاویه فرمان
-def process_image_and_compute_steering(image, offset=50):
+def process_image_and_compute_steering(image, lane_point, offset=50):
     """
     - offset: فاصله مطلوب از خط راست جاده به پیکسل (به گونه‌ای تنظیم می‌شود که خودرو در فاصله‌ای امن نسبت به خط راست قرار گیرد)
     """
@@ -125,11 +144,12 @@ def process_image_and_compute_steering(image, offset=50):
     src_points = np.float32(
         [
             [
-                (width // 2 - 75, (height // 2) - 28),
-                ((width // 2) + 115, (height // 2) - 28),
+                (width // 2 - 70, (height // 2)+50),
+                ((width // 2) + 190, (height // 2)+50),
                 (width, height - 100),
-                (0, height - 100),
-            ]
+                (40, height - 100),
+            ]# This part of the code is performing the following operations:
+            
         ]
     )
     dst_points = np.float32([[0, 0], [width, 0], [width, height], [0, height]])
@@ -140,14 +160,12 @@ def process_image_and_compute_steering(image, offset=50):
     edges = detect_edges(bev_image)
 
     lines = detect_lines_hough(edges)
-    if lines is None:
-        print("هیچ خطی شناسایی نشد.")
 
-    y_target = int(height * 0.875)
-    right_lane_point = compute_right_lane_point(lines, y_target, width)
+    y_target = int(height * 0.8)
+    lane_point = compute_right_lane_point(lines, y_target, lane_point, width) if offset < 0 else compute_left_lane_point(lines, y_target, width, width)
 
     # موقعیت مطلوب خودرو: فاصله ایمن از خط راست (خط مطلوب = نقطه روی خط راست - offset)
-    desired_position = right_lane_point - offset
+    desired_position = lane_point + offset
 
     # مرکز تصویر به عنوان موقعیت فعلی خودرو
     center_position = width / 2.0
@@ -168,7 +186,7 @@ def process_image_and_compute_steering(image, offset=50):
             for x1, y1, x2, y2 in line:
                 cv2.line(output, (x1, y1), (x2, y2), (0, 255, 0), 2)
     # رسم نقطه روی خط راست
-    cv2.circle(output, (int(right_lane_point), y_target), 5, (0, 0, 255), -1)
+    cv2.circle(output, (int(lane_point), y_target), 5, (0, 0, 255), -1)
     # رسم خط مرکز تصویر
     cv2.line(
         output,
@@ -194,43 +212,37 @@ def process_image_and_compute_steering(image, offset=50):
         2,
     )
 
-    cv2.ellipse(
-        output,
-        (int(center_position), height),
-        (1, 1),   # شعاع کمان
-        0,          # زاویه چرخش بیضی (در اینجا لازم نیست بچرخونیم)
-        0,
-        steering_angle,
-        (0, 0, 0),
-        2
-    )
-
     un_bev = bird_eye_view_transform(
         output, dst_points, src_points, (width, height)
     )
 
     # ۳. ترکیب با وزن – مثل overlay
-    alpha = 0.6  # میزان شفافیت لایه بالا (HSV)
+    alpha = 0.5  # میزان شفافیت لایه بالا (HSV)
     beta = 0.9 - alpha
 
-    overlay = cv2.addWeighted(image, beta, un_bev, alpha, 0)
+    overlay = cv2.addWeighted(image, beta, un_bev, alpha, 1)
 
     # رسم نقطه موقعیت مطلوب خودرو
     cv2.circle(output, (int(desired_position), y_target), 5, (255, 0, 255), -1)
     cv2.imshow("output", output)
     cv2.imshow("edges", edges)
     cv2.imshow("output1", overlay)
-    print("CTE:", cte)
-    print("PID:", steering_angle)
-    return steering_angle
+    # print("CTE:", cte)
+    # print("PID:", steering_angle)
+    return steering_angle, lane_point
 
 
 # Sleep for 3 seconds to make sure that client connected to the simulator
 time.sleep(3)
 
+RIGHT_OFFSET = -185
+LEFT_OFFSET = 210
+
+obsterCount = 0
 
 try:
     prev_steering = 1
+    lane_point = 256
     while True:
         # Counting the loops
         counter = counter + 1
@@ -251,18 +263,33 @@ try:
         # Start getting image and sensor data after 4 loops
         if counter > 4:
             counter = counter + 1
+            if obsterCount > 0:
+                obsterCount = obsterCount + 1
             # Returns a list with three items which the 1st one is Left sensor data\
             # the 2nd one is the Middle Sensor data, and the 3rd is the Right one.
             sensors = car.getSensors()
 
+            m = sensors[1]
             image = car.getImage()
-            steering = process_image_and_compute_steering(image, 185)
+            offset = RIGHT_OFFSET
+            if m <= 1300:
+                obsterCount = 1
+
+            if obsterCount > 0 and obsterCount < 50:
+                offset = LEFT_OFFSET
+            elif obsterCount >= 50 :
+                obsterCount = 0
+                offset = RIGHT_OFFSET
+                lane_point = 512
+
+            print(obsterCount)
+            steering, lane_point = process_image_and_compute_steering(image, lane_point, offset)
             
-            if abs(steering - prev_steering) > 2.5 or abs(steering) > 20:
-                # car.setSpeed(20)
-                print("stop")
-            else:
-                car.setSpeed(3000)
+            # if abs(steering - prev_steering) > 2.5 or abs(steering) > 20:
+            #     car.setSpeed(100)
+            #     print("stop")
+            # else:
+            #     car.setSpeed(3000)
             prev_steering = steering
 
             
@@ -272,6 +299,8 @@ try:
 
             if cv2.waitKey(10) == ord("q"):
                 break
+
+            time.sleep(0.001)
 
             
 finally:
