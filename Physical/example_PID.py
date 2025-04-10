@@ -4,7 +4,6 @@
 """
 
 import realCar
-import config
 import time
 import cv2
 import numpy as np
@@ -12,8 +11,6 @@ import numpy as np
 # Creating an instance of the Car class
 car = realCar.Car()
 
-# Connecting to the server (Simulator)
-car.connect(config.SIMULATOR_IP, config.SIMULATOR_PORT)
 
 # Counter variable
 counter = 0
