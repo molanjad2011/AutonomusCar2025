@@ -110,7 +110,7 @@ def compute_left_lane_point(lines, y_target, left_lane_point, image_width):
     if lines is not None:
         for line in lines:
             for x1, y1, x2, y2 in line:
-                # انتخاب خطوطی که احتمالاً مربوط به خط راست هستند؛ فرض بر این است که آنها در سمت راست قرار دارند.
+                # انتخاب خطوطی که احتمالاً مربوط به خط راست هستند؛ فرض بر این است که آنها در سمت چپ قرار دارند.
                 # لذا قطعا آنها در سه چهارم دیگر صفحه هستند
                 if x1 < image_width * 0.75 and x2 < image_width * 0.75:
                     # اگر خط از y_target عبور می‌کند (تفاوت علامتی)
@@ -124,9 +124,9 @@ def compute_left_lane_point(lines, y_target, left_lane_point, image_width):
     res = np.mean(left_x) # در نهایت میانگین میگیریم
     return res
 
-pid = PID(Kp=4, Ki=0.0001, Kd=10)
+pid = PID(Kp=3.5, Ki=0.00005, Kd=12)
 # تابع اصلی پردازش تصویر و محاسبه زاویه فرمان
-def process_image_and_compute_steering(image, lane_point, offset=50):
+def process_image_and_compute_steering(image, lane_point, offset=50, obstT:bool = False):
     """
     - offset: فاصله مطلوب از خط راست جاده به پیکسل (به گونه‌ای تنظیم می‌شود که خودرو در فاصله‌ای امن نسبت به خط راست قرار گیرد)
     """
@@ -144,14 +144,25 @@ def process_image_and_compute_steering(image, lane_point, offset=50):
     src_points = np.float32(
         [
             [
-                (width // 2 - 70, (height // 2)+50),
+                (width // 2, (height // 2)+50),
                 ((width // 2) + 190, (height // 2)+50),
                 (width, height - 100),
-                (40, height - 100),
+                (width // 2, height - 100),
+            ]# This part of the code is performing the following operations:
+            
+        ]
+    ) if (not obstT) else np.float32(
+        [
+            [
+                ((width // 2) - 190, (height // 2)+50),
+                (width // 2, (height // 2)+50),
+                (width // 2, height - 100),
+                (0, height - 100),
             ]# This part of the code is performing the following operations:
             
         ]
     )
+
     dst_points = np.float32([[0, 0], [width, 0], [width, height], [0, height]])
     bev_image = bird_eye_view_transform(
         hsv_filtered, src_points, dst_points, (width, height)
@@ -162,7 +173,7 @@ def process_image_and_compute_steering(image, lane_point, offset=50):
     lines = detect_lines_hough(edges)
 
     y_target = int(height * 0.8)
-    lane_point = compute_right_lane_point(lines, y_target, lane_point, width) if offset < 0 else compute_left_lane_point(lines, y_target, width, width)
+    lane_point = compute_right_lane_point(lines, y_target, lane_point, width) if not obstT else compute_left_lane_point(lines, y_target, 0, width)
 
     # موقعیت مطلوب خودرو: فاصله ایمن از خط راست (خط مطلوب = نقطه روی خط راست - offset)
     desired_position = lane_point + offset
@@ -235,14 +246,15 @@ def process_image_and_compute_steering(image, lane_point, offset=50):
 # Sleep for 3 seconds to make sure that client connected to the simulator
 time.sleep(3)
 
-RIGHT_OFFSET = -185
-LEFT_OFFSET = 210
+RIGHT_OFFSET = -180
+LEFT_OFFSET = 220
 
 obsterCount = 0
 
 try:
     prev_steering = 1
     lane_point = 256
+    steering = 0
     while True:
         # Counting the loops
         counter = counter + 1
@@ -263,8 +275,7 @@ try:
         # Start getting image and sensor data after 4 loops
         if counter > 4:
             counter = counter + 1
-            if obsterCount > 0:
-                obsterCount = obsterCount + 1
+
             # Returns a list with three items which the 1st one is Left sensor data\
             # the 2nd one is the Middle Sensor data, and the 3rd is the Right one.
             sensors = car.getSensors()
@@ -272,29 +283,44 @@ try:
             m = sensors[1]
             image = car.getImage()
             offset = RIGHT_OFFSET
-            if m <= 1300:
-                obsterCount = 1
+            obst :bool = False
 
-            if obsterCount > 0 and obsterCount < 50:
+            if m <= 1200: 
+                obsterCount = 35
+                if (abs(m - 1400) > 400):
+                    car.setSpeed(-100)
+                    print("stop")
+                car.setSteering(-(90))
+                lane_point = 0
+
+            if obsterCount > 0:
+                obst = True
                 offset = LEFT_OFFSET
-            elif obsterCount >= 50 :
-                obsterCount = 0
-                offset = RIGHT_OFFSET
-                lane_point = 512
+                obsterCount = obsterCount - 1 
+                print(obsterCount)     
 
-            print(obsterCount)
-            steering, lane_point = process_image_and_compute_steering(image, lane_point, offset)
+            if obsterCount == 0:
+                car.setSteering(100)
+                offset = RIGHT_OFFSET
+                lane_point = 500
+                obsterCount = obsterCount - 1
+                print(obsterCount)
+
+
+            if obsterCount < 0 :
+                obst = False
+            
+            steering, lane_point = process_image_and_compute_steering(image, lane_point, offset, obst)
+            prev_steering = steering
+
+            
             
             # if abs(steering - prev_steering) > 2.5 or abs(steering) > 20:
             #     car.setSpeed(100)
             #     print("stop")
             # else:
             #     car.setSpeed(3000)
-            prev_steering = steering
-
-            
             car.setSteering(((steering / 90.0) * 100))
-
             # Showing the opencv type image
 
             if cv2.waitKey(10) == ord("q"):
