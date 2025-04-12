@@ -288,7 +288,7 @@ try:
 
             if m <= 1200: 
                 obsterCount = obstSignalPower
-                if (abs(m - 1400) > 400):
+                if (abs(m) < 400):
                     car.setSpeed(-100)
                     print("stop")
                 car.setSteering(-(90))
