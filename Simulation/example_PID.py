@@ -284,9 +284,10 @@ try:
             image = car.getImage()
             offset = RIGHT_OFFSET
             obst :bool = False
+            obstSignalPower = 35
 
             if m <= 1200: 
-                obsterCount = 35
+                obsterCount = obstSignalPower
                 if (abs(m - 1400) > 400):
                     car.setSpeed(-100)
                     print("stop")
