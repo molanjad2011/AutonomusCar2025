@@ -19,8 +19,9 @@ car.connect(config.SIMULATOR_IP, config.SIMULATOR_PORT)
 counter = 0
 
 debug_mode = True
-
-
+RIGHT_OFFSET = -180 
+LEFT_OFFSET = 220
+obsterCount = 0 
 
 # PID Controller (Proportional integral derivative): it's trying to decreese error, the error is the steering angle errors
 class PID:
@@ -44,7 +45,30 @@ class PID:
         # خروجی خام PID (این خروجی ممکن است بسیار بزرگ شود)
         raw_output = P + I + D
         return raw_output
+class TurnController:
+    def __init__(self, Kp=0.8, Ki=0.001, Kd=0.1):
+        self.pid = PID(Kp, Ki, Kd)
+        self.target_angle = 0
+        self.current_angle = 0
+        
+    def update(self, dt=0.1):
+        error = self.target_angle - self.current_angle
+        adjustment = self.pid.update(error)
+        self.current_angle += adjustment * dt
+        return np.clip(self.current_angle, -100, 100)
+    
+    def set_target(self, angle):
+        self.target_angle = np.clip(angle, -100, 100)
+turn_controller = TurnController()
 
+def start_right_turn():
+    turn_controller.set_target(-100)
+
+def start_left_turn():
+    turn_controller.set_target(100)
+
+def stop_turn():
+    turn_controller.set_target(0)
 
 # یک تبدیل هندسی است که یک ذوزنقه را روی کل عکس می‌کشد و سپس تصویر را به اندازۀ یک مستطیل می‌کشد تا تصویر به گونه ای شود که انگار یک پرنده از بالا در حال نگاه کردن است
 # به این نما، نمای بالا سر پرنده میگویند
@@ -328,7 +352,6 @@ try:
                 break
 
             time.sleep(0.001)
-
             
 finally:
     car.stop()
