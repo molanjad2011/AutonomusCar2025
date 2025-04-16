@@ -455,8 +455,8 @@ try:
             )
 
             abs_steering = abs(steering)
-            if abs_steering > 6:
-                car.setSpeed(-70)
+            if abs_steering > 4:
+                car.setSpeed(-100)
             else: car.setSpeed(100)
 
             #w = ff_controller.update(at_obstacle)
