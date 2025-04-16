@@ -455,7 +455,7 @@ try:
             )
 
             abs_steering = abs(steering)
-            if abs_steering > 4:
+            if abs_steering > 2:
                 car.setSpeed(-100)
             else: car.setSpeed(100)
 
