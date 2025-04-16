@@ -6,4 +6,4 @@ PySocks
 PyYAML
 regex
 requests
-
+pyzbar
