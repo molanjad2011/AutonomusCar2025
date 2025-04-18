@@ -151,9 +151,9 @@ def bird_eye_view_transform(image, src_points, dst_points, output_size):
 def hsv_mask(image):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-    # حد بالا و پایین سفید بودن رنگ خطوط
-    lower_yellow = np.array([20, 100, 100], dtype=np.uint8) 
-    upper_yellow = np.array([30, 255, 255], dtype=np.uint8)
+        # حد بالا و پایین سفید بودن رنگ خطوط
+    lower_yellow = np.array([41, 56, 51], dtype=np.uint8)
+    upper_yellow = np.array([44, 68, 41], dtype=np.uint8)  # ترتیب V ممکن است معکوس شود
     mask = cv2.inRange(hsv,lower_yellow, upper_yellow)
     return mask
 
