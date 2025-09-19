@@ -1,2 +1,43 @@
 # AutonomusCar2025Besat
-Autonomous car source with mathematical and control image processing solutions, faster and easy
+
+
+## شرح کلی
+
+این پروژه یک نمونهٔ سادهٔ کنترل خودروی خودران است که از شبیه‌ساز **AVIS Engine** و پردازش تصویر با OpenCV استفاده می‌کند. هدف: تشخیص خط راستِ جاده، محاسبه خطای مسیر (CTE)، و کنترل فرمان با PID برای حفظ فاصلهٔ امن از لاین راست. کد شامل ماژول‌های زیر است:
+
+* ارتباط با شبیه‌ساز (`avisengine.Car()`)
+* پردازش تصویر (HSV masking، Canny، Hough، BEV — Bird Eye View)
+* محاسبهٔ نقطهٔ مرجع روی لاین راست و محاسبهٔ CTE
+* کنترل PID برای تولید فرمان
+* یک کنترل‌کنندهٔ سادهٔ feedforward برای مواقع برخورد با مانع (کد ساختاری آماده)
+* بخش‌های کامنت‌شده برای فیلتر کالمن (قابل فعال‌سازی)
+
+---
+
+## نیازمندی‌ها (Dependencies)
+
+* Python 3.8+
+* numpy
+* opencv-python
+
+نصب سریع:
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+---
+
+## اجرا
+```bash
+python3 example_PID.py
+```
+---
+
+در اجرای برنامه پنجره‌های OpenCV باز می‌شوند: `output`, `edges`, `output1`. با فشردن `q` برنامه متوقف می‌شود.
+
+
+
+
+
+
