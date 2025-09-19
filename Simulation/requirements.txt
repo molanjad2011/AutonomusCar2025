@@ -7,5 +7,4 @@ PySocks
 PyYAML
 regex
 requests
-pyzbar
-pupil-apriltags
+
